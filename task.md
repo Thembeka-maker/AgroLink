@@ -1,0 +1,11 @@
+- `[ ]` Localize Mock Data
+    - `[ ]` Update src/mockData.ts with Eswatini/SADC agricultural crops, locations, and names
+- `[ ]` Add Landing Page Styles
+    - `[ ]` Add new classes to src/index.css for split layout, hero cards, and auth forms
+- `[ ]` Build Landing Page Component
+    - `[ ]` Create src/components/LandingPage.tsx with login switch and farmer/buyer registration forms
+- `[ ]` Integrate Session Control in Header
+    - `[ ]` Update src/components/Header.tsx with logout and active account context
+- `[ ]` Implement View Routing & Registration Logic
+    - `[ ]` Update src/App.tsx with view-switching states and registration callbacks
+- `[ ]` Compile and Build Verification
