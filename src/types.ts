@@ -1,3 +1,11 @@
+export interface Review {
+  id: string;
+  buyerName: string;
+  rating: number;
+  comment: string;
+  date: string;
+}
+
 export interface FarmerProfile {
   id: string;
   name: string;
@@ -17,6 +25,9 @@ export interface FarmerProfile {
   regNumber: string;
   docName?: string;
   docUrl?: string;
+  emailVerified?: boolean;
+  preferredPaymentMethod?: 'card' | 'mobile_money' | 'bank_transfer';
+  reviews?: Review[];
 }
 
 export interface BuyerProfile {
@@ -34,6 +45,8 @@ export interface BuyerProfile {
   regNumber: string;
   docName?: string;
   docUrl?: string;
+  emailVerified?: boolean;
+  preferredPaymentMethod?: 'card' | 'mobile_money' | 'bank_transfer';
 }
 
 export interface AdminProfile {

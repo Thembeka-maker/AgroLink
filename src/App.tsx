@@ -32,6 +32,7 @@ import {
   demandStore,
   dealStore,
 } from './services/storageService';
+import { emailService } from './services/emailService';
 
 // Seed initial data into localStorage only on first launch
 seedIfEmpty(INITIAL_FARMERS, INITIAL_BUYERS, INITIAL_LISTINGS, INITIAL_DEMANDS, INITIAL_DEALS);
@@ -59,8 +60,8 @@ function App() {
     {
       id: 'n_welcome_f1',
       userId: 'f1',
-      title: 'Welcome Sibusiso',
-      message: 'Your sugar listings have 4 potential buyer matches on the SADC trade corridor.',
+      title: 'Welcome to AgroLink',
+      message: 'Your farm profile is active. AI Smart Matcher is searching for buyers.',
       timestamp: '10 mins ago',
       read: false,
       type: 'matching_alert',
@@ -202,10 +203,36 @@ function App() {
 
   const handleSuspendFarmer = (id: string, suspend: boolean) => {
     setFarmers(prev => prev.map(f => f.id === id ? { ...f, suspended: suspend } : f));
+    const farmer = farmers.find(f => f.id === id);
+    if (farmer) {
+      emailService.sendEmail(
+        farmer.contact,
+        suspend ? 'Account Suspended — AgroLink' : 'Account Reinstated — AgroLink',
+        suspend
+          ? `Dear ${farmer.name}, your AgroLink account has been suspended by the administration. Your listings are no longer visible to buyers. Contact support to appeal.`
+          : `Dear ${farmer.name}, your AgroLink account has been reinstated. Your listings are now visible again.`
+      );
+      addNotification(id, suspend ? 'Account Suspended' : 'Account Reinstated',
+        suspend ? 'Your account has been suspended by admin. Contact support.' : 'Your account has been reinstated and is now active.',
+        'admin');
+    }
   };
 
   const handleSuspendBuyer = (id: string, suspend: boolean) => {
     setBuyers(prev => prev.map(b => b.id === id ? { ...b, suspended: suspend } : b));
+    const buyer = buyers.find(b => b.id === id);
+    if (buyer) {
+      emailService.sendEmail(
+        buyer.contact,
+        suspend ? 'Account Suspended — AgroLink' : 'Account Reinstated — AgroLink',
+        suspend
+          ? `Dear ${buyer.company}, your AgroLink buyer account has been suspended. Please contact support.`
+          : `Dear ${buyer.company}, your AgroLink buyer account has been reinstated.`
+      );
+      addNotification(id, suspend ? 'Account Suspended' : 'Account Reinstated',
+        suspend ? 'Your account has been suspended by admin. Contact support.' : 'Your account has been reinstated and is now active.',
+        'admin');
+    }
   };
 
   const handleDeleteFarmer = (id: string) => {
@@ -220,11 +247,27 @@ function App() {
 
   const handleApproveFarmer = (id: string) => {
     setFarmers(prev => prev.map(f => f.id === id ? { ...f, approved: true } : f));
+    const farmer = farmers.find(f => f.id === id);
+    if (farmer) {
+      emailService.sendEmail(
+        farmer.contact,
+        'Account Approved — AgroLink',
+        `Dear ${farmer.name}, your AgroLink farmer account has been verified and approved. You can now list your produce and receive buyer offers.`
+      );
+    }
     addNotification(id, 'Account Approved', 'Your SADC farmer exchange account has been verified and approved.', 'admin');
   };
 
   const handleApproveBuyer = (id: string) => {
     setBuyers(prev => prev.map(b => b.id === id ? { ...b, approved: true } : b));
+    const buyer = buyers.find(b => b.id === id);
+    if (buyer) {
+      emailService.sendEmail(
+        buyer.contact,
+        'Account Approved — AgroLink',
+        `Dear ${buyer.company}, your AgroLink buyer account has been verified and approved. You can now post sourcing demands and connect with farmers.`
+      );
+    }
     addNotification(id, 'Account Approved', 'Your SADC buyer procurement account has been verified and approved.', 'admin');
   };
 
@@ -251,7 +294,24 @@ function App() {
     );
     const deal = deals.find(d => d.id === details.dealId);
     if (deal) {
-      addNotification(deal.buyerId, 'Payment Confirmed', `Payment of $${deal.totalAmount} for ${deal.crop} confirmed. Ref: ${ref}`, 'payment');
+      const buyer = buyers.find(b => b.id === deal.buyerId);
+      const farmer = farmers.find(f => f.id === deal.farmerId);
+      // Simulated email notifications for payment
+      if (buyer) {
+        emailService.sendEmail(
+          buyer.contact,
+          'Payment Confirmed — AgroLink',
+          `Dear ${buyer.company}, your payment for ${deal.quantity}kg of ${deal.crop} has been confirmed. Reference: ${ref}. Delivery tracking is now active.`
+        );
+      }
+      if (farmer) {
+        emailService.sendEmail(
+          farmer.contact,
+          'Payment Received — AgroLink',
+          `Dear ${farmer.name}, the buyer ${deal.buyerName} has completed payment for your ${deal.quantity}kg ${deal.crop}. Reference: ${ref}.`
+        );
+      }
+      addNotification(deal.buyerId, 'Payment Confirmed', `Payment for ${deal.crop} confirmed. Ref: ${ref}`, 'payment');
       addNotification(deal.farmerId, 'Payment Received', `Buyer has completed payment for ${deal.crop}. Ref: ${ref}`, 'payment');
     }
   };
@@ -387,6 +447,7 @@ function App() {
         <PaymentModal
           deal={currentPaymentDeal}
           buyerCurrency={activeBuyer?.currency ?? 'USD'}
+          preferredMethod={activeBuyer?.preferredPaymentMethod}
           onConfirm={handlePaymentConfirm}
           onClose={handleClosePayment}
         />

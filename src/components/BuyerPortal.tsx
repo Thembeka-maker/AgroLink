@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BuyerProfile, DemandRequirement, ProduceListing, FarmerProfile, DealOffer } from '../types';
+import { BuyerProfile, DemandRequirement, ProduceListing, FarmerProfile, DealOffer, Review } from '../types';
 import { MOCK_CROPS } from '../mockData';
 import { aiEngine } from '../services/aiEngine';
 import {
@@ -14,6 +14,9 @@ import {
   ArrowRight,
   TrendingUp,
   CreditCard,
+  PackageCheck,
+  X,
+  MessageSquare,
 } from 'lucide-react';
 import { formatCurrency } from '../services/currencyService';
 
@@ -59,6 +62,10 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
   // Rating Modal / State
   const [ratingDealId, setRatingDealId] = useState<string | null>(null);
   const [ratingStars, setRatingStars] = useState<number>(5);
+  const [ratingComment, setRatingComment] = useState<string>('');
+
+  // View Reviews Modal for a specific farmer
+  const [viewReviewsFarmer, setViewReviewsFarmer] = useState<FarmerProfile | null>(null);
 
   const buyerDemands = demands.filter((d) => d.buyerId === activeBuyer.id);
   const buyerDeals = deals.filter((d) => d.buyerId === activeBuyer.id);
@@ -136,7 +143,7 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
     addNotification(
       listing.farmerId,
       'New Deal Offer',
-      `${activeBuyer.company} initiated an offer for ${newDeal.quantity}kg of your ${newDeal.crop} at $${newDeal.price}/kg.`,
+      `${activeBuyer.company} initiated an offer for ${newDeal.quantity}kg of your ${newDeal.crop} at ${formatCurrency(newDeal.price, activeBuyer.currency)}/kg.`,
       'deal_offer'
     );
 
@@ -163,13 +170,42 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
     );
   };
 
+  // Buyer confirms delivery was received
+  const handleConfirmDelivery = (dealId: string) => {
+    setDeals((prev) =>
+      prev.map((d) => {
+        if (d.id === dealId) {
+          return { ...d, deliveryStatus: 'delivered' };
+        }
+        return d;
+      })
+    );
+    const deal = deals.find(d => d.id === dealId);
+    if (deal) {
+      addNotification(
+        deal.farmerId,
+        'Delivery Confirmed',
+        `${activeBuyer.company} has confirmed receipt of ${deal.quantity}kg ${deal.crop}. Transaction is now complete.`,
+        'deal_status'
+      );
+    }
+  };
+
   const submitFarmerRating = (e: React.FormEvent) => {
     e.preventDefault();
     if (!ratingDealId) return;
 
     const deal = deals.find((d) => d.id === ratingDealId);
     if (deal) {
-      // Update farmer rating calculation in state
+      const newReview: Review = {
+        id: 'rev_' + Date.now(),
+        buyerName: activeBuyer.company,
+        rating: ratingStars,
+        comment: ratingComment.trim() || 'Smooth transaction, great quality produce.',
+        date: new Date().toISOString().split('T')[0],
+      };
+
+      // Update farmer rating calculation and add review in state
       setFarmers((prev) =>
         prev.map((f) => {
           if (f.id === deal.farmerId) {
@@ -180,6 +216,7 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
               ...f,
               rating: newRating,
               ratingCount: newCount,
+              reviews: [newReview, ...(f.reviews ?? [])],
             };
           }
           return f;
@@ -201,9 +238,10 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
 
     setRatingDealId(null);
     setRatingStars(5);
+    setRatingComment('');
   };
 
-  // Get current active matches
+  // Get current active matches — suspended farmers are filtered by aiEngine
   const currentDemand = demands.find((d) => d.id === selectedDemandId);
   const matchedResults = currentDemand
     ? aiEngine.runSmartMatching(currentDemand, listings, farmers)
@@ -261,7 +299,7 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
               </div>
             )}
 
-            <form onSubmit={handlePostDemand}>
+            <form onSubmit={handlePostDemand} autoComplete="off">
               <div className="grid-cols-2">
                 <div className="form-group">
                   <label className="form-label">Crop Type Required</label>
@@ -269,6 +307,7 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                     className="form-control"
                     value={crop}
                     onChange={(e) => setCrop(e.target.value)}
+                    autoComplete="off"
                   >
                     {MOCK_CROPS.map((c) => (
                       <option key={c} value={c}>{c}</option>
@@ -285,11 +324,12 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                     onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 0))}
                     min="1"
                     required
+                    autoComplete="off"
                   />
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Max Budget Limit ($ USD per kg)</label>
+                  <label className="form-label">Max Budget Limit ({activeBuyer.currency} per kg)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -298,6 +338,7 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                     onChange={(e) => setBudget(Math.max(0.01, parseFloat(e.target.value) || 0))}
                     min="0.01"
                     required
+                    autoComplete="off"
                   />
                 </div>
 
@@ -308,6 +349,7 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                     className="form-control"
                     value={deadline}
                     onChange={(e) => setDeadline(e.target.value)}
+                    autoComplete="off"
                   />
                 </div>
               </div>
@@ -316,6 +358,21 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                 Run Smart Matching Algorithm
               </button>
             </form>
+
+            {/* Buyer's Active Demands */}
+            {buyerDemands.length > 0 && (
+              <div style={{ marginTop: '2rem' }}>
+                <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>Your Active Demands</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {buyerDemands.map((d) => (
+                    <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', backgroundColor: 'var(--color-background)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', border: '1px solid var(--color-border)' }}>
+                      <span style={{ fontWeight: 600 }}>{d.crop} — {d.quantity.toLocaleString()} kg</span>
+                      <span style={{ color: 'var(--color-primary-light)', fontWeight: 700 }}>{formatCurrency(d.budget, activeBuyer.currency)}/kg</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -339,7 +396,7 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                   >
                     {buyerDemands.map((d) => (
                       <option key={d.id} value={d.id}>
-                        {d.quantity}kg {d.crop} (${d.budget}/kg)
+                        {d.quantity}kg {d.crop} ({formatCurrency(d.budget, activeBuyer.currency)}/kg)
                       </option>
                     ))}
                   </select>
@@ -383,11 +440,27 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                             <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                               <MapPin size={12} /> {listing.location}
                             </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.2rem' }}>
+                              <Star size={12} fill="var(--color-accent-gold)" color="var(--color-accent-gold)" />
+                              <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>{farmer.rating}</span>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>({farmer.ratingCount} reviews)</span>
+                            </div>
                           </div>
                         </div>
 
                         {/* Match score Badge */}
                         <div className="flex-gap-sm">
+                          <button
+                            onClick={() => setViewReviewsFarmer(farmer)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '0.3rem',
+                              padding: '0.3rem 0.65rem', borderRadius: 'var(--radius-sm)',
+                              border: '1px solid var(--color-border)', background: 'var(--color-background)',
+                              cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, color: 'var(--color-text-muted)',
+                            }}
+                          >
+                            <MessageSquare size={12} /> View Reviews
+                          </button>
                           <div className={`match-score-badge ${isHighMatch ? 'match-high' : isMedMatch ? 'match-med' : 'match-low'}`}>
                             <TrendingUp size={14} />
                             {matchScore}% Match
@@ -404,8 +477,11 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                         <div>
                           <p style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>Price Sourcing</p>
                           <strong style={{ color: 'var(--color-primary-light)', fontSize: '1.05rem' }}>
-                            ${listing.price.toFixed(2)}/kg
+                            {formatCurrency(listing.price, activeBuyer.currency)}/kg
                           </strong>
+                          {activeBuyer.currency !== 'USD' && (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', display: 'block' }}>≈ ${listing.price.toFixed(2)} USD/kg</span>
+                          )}
                         </div>
                       </div>
 
@@ -475,6 +551,14 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                   } else if (deal.status === 'rejected') {
                     currentStep = 0; // Rejected offer
                   }
+
+                  const canConfirmDelivery = deal.status === 'accepted'
+                    && deal.paymentStatus === 'paid'
+                    && deal.deliveryStatus === 'in-transit';
+
+                  const canRate = deal.deliveryStatus === 'delivered'
+                    && deal.paymentStatus === 'paid'
+                    && !deal.ratingGiven;
 
                   return (
                     <div
@@ -567,10 +651,11 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                         </div>
                       )}
 
-                      {/* Action buttons on trackers to advance status for testing */}
+                      {/* Action buttons on trackers */}
                       <div className="flex-between" style={{ flexWrap: 'wrap', gap: '1rem', marginTop: '1rem' }}>
                         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-                          {deal.status === 'accepted' && deal.deliveryStatus !== 'delivered' && (
+                          {/* Advance Logistics (test/demo button) */}
+                          {deal.status === 'accepted' && deal.deliveryStatus !== 'delivered' && deal.deliveryStatus !== 'in-transit' && (
                             <button
                               onClick={() => advanceDeliveryStatus(deal.id)}
                               className="btn btn-secondary flex-gap-sm"
@@ -580,6 +665,20 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                               Advance Logistics (Test)
                             </button>
                           )}
+                          
+                          {/* Advance to In-Transit if scheduled */}
+                          {deal.status === 'accepted' && deal.deliveryStatus === 'scheduled' && (
+                            <button
+                              onClick={() => advanceDeliveryStatus(deal.id)}
+                              className="btn btn-secondary flex-gap-sm"
+                              style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', fontWeight: 600 }}
+                            >
+                              <Truck size={12} />
+                              Mark In-Transit (Test)
+                            </button>
+                          )}
+
+                          {/* Pay Now — only if accepted and unpaid */}
                           {deal.status === 'accepted' && deal.paymentStatus === 'unpaid' && (
                             <button
                               onClick={() => onOpenPayment(deal)}
@@ -594,16 +693,41 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                               <CreditCard size={12} /> Pay Now
                             </button>
                           )}
+
+                          {/* Payment Complete badge */}
                           {deal.paymentStatus === 'paid' && (
                             <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', color: '#059669', fontWeight: 700 }}>
                               <CheckCircle size={13} /> Payment Complete
                             </span>
                           )}
+
+                          {/* Confirm Delivery — buyer confirms they received goods (requires paid) */}
+                          {canConfirmDelivery && (
+                            <button
+                              onClick={() => handleConfirmDelivery(deal.id)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '0.4rem',
+                                padding: '0.4rem 0.9rem', fontSize: '0.75rem', fontWeight: 700,
+                                borderRadius: 'var(--radius-md)', border: 'none',
+                                background: 'linear-gradient(135deg, #059669, #10b981)',
+                                color: '#fff', cursor: 'pointer',
+                              }}
+                            >
+                              <PackageCheck size={12} /> Confirm Delivery Received
+                            </button>
+                          )}
+
+                          {/* If in-transit but not paid, show notice */}
+                          {deal.status === 'accepted' && deal.deliveryStatus === 'in-transit' && deal.paymentStatus !== 'paid' && (
+                            <span style={{ fontSize: '0.74rem', color: '#b45309', display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
+                              <Clock size={12} /> Pay to confirm delivery
+                            </span>
+                          )}
                         </div>
 
-                        {/* Rating block */}
+                        {/* Rating block — only after delivery confirmed AND payment made */}
                         <div>
-                          {deal.deliveryStatus === 'delivered' && !deal.ratingGiven && (
+                          {canRate && (
                             <button
                               onClick={() => setRatingDealId(deal.id)}
                               className="btn btn-success flex-gap-sm"
@@ -612,6 +736,11 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                               <Star size={12} />
                               Rate Transaction & Farmer
                             </button>
+                          )}
+                          {deal.deliveryStatus === 'delivered' && deal.paymentStatus !== 'paid' && !deal.ratingGiven && (
+                            <span style={{ fontSize: '0.74rem', color: '#b45309', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <Clock size={12} /> Complete payment to rate
+                            </span>
                           )}
                           {deal.ratingGiven && (
                             <span style={{ fontSize: '0.8rem', color: 'var(--color-success)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -637,7 +766,7 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                 Confirm details to finalize order. Leaving feedback adjusts global AI matcher ratings.
               </p>
 
-              <form onSubmit={submitFarmerRating}>
+              <form onSubmit={submitFarmerRating} autoComplete="off">
                 <div className="form-group" style={{ textAlign: 'center' }}>
                   <label className="form-label">Farmer Rating Score</label>
                   <div className="star-rating-selector" style={{ justifyContent: 'center' }}>
@@ -654,8 +783,21 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                   </div>
                 </div>
 
+                <div className="form-group" style={{ marginTop: '1.25rem' }}>
+                  <label className="form-label">Leave a Comment (Optional)</label>
+                  <textarea
+                    className="form-control"
+                    rows={3}
+                    placeholder="Describe your experience with this farmer and the quality of produce..."
+                    value={ratingComment}
+                    onChange={(e) => setRatingComment(e.target.value)}
+                    autoComplete="off"
+                    style={{ resize: 'vertical', fontFamily: 'inherit', fontSize: '0.85rem' }}
+                  />
+                </div>
+
                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-                  <button type="button" onClick={() => setRatingDealId(null)} className="btn btn-secondary">
+                  <button type="button" onClick={() => { setRatingDealId(null); setRatingComment(''); }} className="btn btn-secondary">
                     Cancel
                   </button>
                   <button type="submit" className="btn btn-primary">
@@ -663,6 +805,61 @@ export const BuyerPortal: React.FC<BuyerPortalProps> = ({
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* View Farmer Reviews Modal */}
+        {viewReviewsFarmer && (
+          <div className="modal-overlay">
+            <div className="modal-content" style={{ maxWidth: '540px', maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>{viewReviewsFarmer.name}</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.25rem' }}>
+                    <Star size={14} fill="var(--color-accent-gold)" color="var(--color-accent-gold)" />
+                    <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{viewReviewsFarmer.rating}</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>({viewReviewsFarmer.ratingCount} reviews)</span>
+                  </div>
+                </div>
+                <button onClick={() => setViewReviewsFarmer(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                {(!viewReviewsFarmer.reviews || viewReviewsFarmer.reviews.length === 0) ? (
+                  <div style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+                    No reviews yet for this farmer.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {viewReviewsFarmer.reviews.map((rev) => (
+                      <div key={rev.id} style={{ padding: '0.85rem 1rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-background)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                          <strong style={{ fontSize: '0.88rem', color: 'var(--color-primary-dark)' }}>{rev.buyerName}</strong>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.15rem' }}>
+                            {Array.from({ length: 5 }, (_, idx) => (
+                              <Star key={idx} size={12} fill={Math.round(rev.rating) > idx ? 'var(--color-accent-gold)' : 'none'} color="var(--color-accent-gold)" />
+                            ))}
+                            <span style={{ fontSize: '0.78rem', fontWeight: 700, marginLeft: '0.2rem' }}>{rev.rating}</span>
+                          </div>
+                        </div>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--color-text)', margin: 0, fontStyle: 'italic', lineHeight: '1.45' }}>
+                          "{rev.comment}"
+                        </p>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', marginTop: '0.3rem', display: 'block' }}>{rev.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--color-border)', marginTop: '1rem' }}>
+                <button onClick={() => setViewReviewsFarmer(null)} className="btn btn-secondary" style={{ width: '100%' }}>
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}

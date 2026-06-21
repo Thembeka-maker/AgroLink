@@ -6,6 +6,7 @@ import { formatCurrency } from '../services/currencyService';
 interface PaymentModalProps {
   deal: DealOffer;
   buyerCurrency: string;
+  preferredMethod?: 'card' | 'mobile_money' | 'bank_transfer';
   onConfirm: (details: PaymentDetails) => void;
   onClose: () => void;
 }
@@ -15,12 +16,19 @@ type PaymentStep = 'method' | 'details' | 'confirm' | 'success';
 export const PaymentModal: React.FC<PaymentModalProps> = ({
   deal,
   buyerCurrency,
+  preferredMethod,
   onConfirm,
   onClose,
 }) => {
   const [step, setStep] = useState<PaymentStep>('method');
-  const [method, setMethod] = useState<PaymentDetails['method']>('card');
+  // Default to preferred method, or 'card' for non-Eswatini, or 'mobile_money' for SZL
+  const defaultMethod: PaymentDetails['method'] =
+    preferredMethod ?? (buyerCurrency === 'SZL' ? 'mobile_money' : 'card');
+  const [method, setMethod] = useState<PaymentDetails['method']>(defaultMethod);
   const [processing, setProcessing] = useState(false);
+
+  // Eswatini users can use Mobile Money, others cannot
+  const isEswatini = buyerCurrency === 'SZL';
 
   // Card fields
   const [cardNumber, setCardNumber] = useState('');
@@ -148,7 +156,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                 {([
                   { id: 'card', label: 'Debit / Credit Card', sub: 'Visa, Mastercard, Amex', icon: <CreditCard size={20} /> },
-                  { id: 'mobile_money', label: 'Mobile Money', sub: 'ESwatini Mobile, M-Pesa, MTN MoMo', icon: <Smartphone size={20} /> },
+                  ...(isEswatini ? [{ id: 'mobile_money' as const, label: 'Mobile Money', sub: 'ESwatini Mobile (MTN, Eswatini Mobile)', icon: <Smartphone size={20} /> }] : []),
                   { id: 'bank_transfer', label: 'Bank Transfer', sub: 'Standard Bank, FNB, Nedbank, Eswatini Bank', icon: <Building2 size={20} /> },
                 ] as const).map((opt) => (
                   <button
@@ -181,6 +189,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     )}
                   </button>
                 ))}
+                {!isEswatini && (
+                  <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', padding: '0.4rem 0.5rem', backgroundColor: 'var(--color-background)', borderRadius: 'var(--radius-sm)', border: '1px dashed var(--color-border)' }}>
+                    ℹ Mobile Money is only available for Eswatini (SZL) account holders.
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -202,23 +215,27 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                       value={formatCard(cardNumber)}
                       onChange={(e) => setCardNumber(e.target.value.replace(/\s/g, ''))}
                       maxLength={19}
+                      autoComplete="off"
                     />
                   </div>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Cardholder Name</label>
                     <input className="form-control" placeholder="Full name on card"
-                      value={cardHolder} onChange={(e) => setCardHolder(e.target.value)} />
+                      value={cardHolder} onChange={(e) => setCardHolder(e.target.value)}
+                      autoComplete="off" />
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Expiry</label>
                       <input className="form-control" placeholder="MM/YY"
-                        value={formatExpiry(cardExpiry)} onChange={(e) => setCardExpiry(e.target.value.replace('/', ''))} maxLength={5} />
+                        value={formatExpiry(cardExpiry)} onChange={(e) => setCardExpiry(e.target.value.replace('/', ''))} maxLength={5}
+                        autoComplete="off" />
                     </div>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">CVV</label>
                       <input className="form-control" placeholder="•••" type="password"
-                        value={cardCvv} onChange={(e) => setCardCvv(e.target.value.slice(0, 4))} maxLength={4} />
+                        value={cardCvv} onChange={(e) => setCardCvv(e.target.value.slice(0, 4))} maxLength={4}
+                        autoComplete="new-password" />
                     </div>
                   </div>
                   <div style={{
@@ -236,12 +253,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Mobile Number</label>
                     <input className="form-control" placeholder="e.g. +268 7602-1234"
-                      value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value)} />
+                      value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value)}
+                      autoComplete="off" />
                   </div>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Mobile PIN</label>
                     <input className="form-control" type="password" placeholder="Enter your mobile money PIN"
-                      value={mobilePin} onChange={(e) => setMobilePin(e.target.value.slice(0, 6))} maxLength={6} />
+                      value={mobilePin} onChange={(e) => setMobilePin(e.target.value.slice(0, 6))} maxLength={6}
+                      autoComplete="new-password" />
                   </div>
                   <div style={{
                     backgroundColor: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.3)',
@@ -272,7 +291,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Your Bank Reference / POP Number</label>
                     <input className="form-control" placeholder="Enter proof of payment reference"
-                      value={bankRef} onChange={(e) => setBankRef(e.target.value)} />
+                      value={bankRef} onChange={(e) => setBankRef(e.target.value)}
+                      autoComplete="off" />
                   </div>
                 </div>
               )}

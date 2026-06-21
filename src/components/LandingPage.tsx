@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
   Sprout, Globe, User, Plus, AlertTriangle, Camera, LogIn,
-  Leaf, ShoppingCart, Shield, Upload, FileText,
+  Leaf, ShoppingCart, Shield, Upload, FileText, Mail, Check
 } from 'lucide-react';
 import { FarmerProfile, BuyerProfile } from '../types';
 import { AFRICAN_COUNTRIES } from '../services/currencyService';
+import { emailService } from '../services/emailService';
 
 interface LandingPageProps {
   farmers: FarmerProfile[];
@@ -40,6 +41,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [adminPassword, setAdminPassword] = useState('');
   const [adminError, setAdminError] = useState('');
 
+  // Email Verification State
+  const [verifyingReg, setVerifyingReg] = useState<{ role: 'farmer' | 'buyer'; details: any; code: string } | null>(null);
+  const [enteredCode, setEnteredCode] = useState('');
+  const [verError, setVerError] = useState('');
+
   // Farmer Register Form State
   const [farmerForm, setFarmerForm] = useState({
     name: '',
@@ -54,6 +60,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     confirmPassword: '',
     regNumber: '',
     docName: '',
+    docUrl: '',
+    preferredPaymentMethod: '',
   });
 
   // Buyer Register Form State
@@ -68,6 +76,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     confirmPassword: '',
     regNumber: '',
     docName: '',
+    docUrl: '',
+    preferredPaymentMethod: '',
   });
 
   const handleCountryChange = (country: string, form: 'farmer' | 'buyer') => {
@@ -92,13 +102,54 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const handleFarmerDocChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setFarmerForm(prev => ({ ...prev, docName: file.name }));
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFarmerForm(prev => ({ ...prev, docName: file.name, docUrl: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleBuyerDocChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setBuyerForm(prev => ({ ...prev, docName: file.name }));
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setBuyerForm(prev => ({ ...prev, docName: file.name, docUrl: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const startVerification = (role: 'farmer' | 'buyer', details: any, email: string) => {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setVerifyingReg({ role, details, code });
+    setEnteredCode('');
+    setVerError('');
+    emailService.sendEmail(
+      email,
+      'AgroLink SADC Email Verification Code',
+      `Welcome to AgroLink! Your 6-digit email verification code is: ${code}. Enter this code on the verification screen to complete your registry signup.`
+    );
+  };
+
+  const handleConfirmVerification = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verifyingReg) return;
+    if (enteredCode.trim() === verifyingReg.code) {
+      if (verifyingReg.role === 'farmer') {
+        onRegisterFarmer({
+          ...verifyingReg.details,
+          emailVerified: true
+        });
+      } else {
+        onRegisterBuyer({
+          ...verifyingReg.details,
+          emailVerified: true
+        });
+      }
+      setVerifyingReg(null);
+    } else {
+      setVerError('Incorrect 6-digit verification code. Please try again.');
+    }
   };
 
   const handleLogin = (e: React.FormEvent) => {
@@ -139,7 +190,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     if (farmerForm.password.length < 6) { alert('Password must be at least 6 characters.'); return; }
     if (farmerForm.password !== farmerForm.confirmPassword) { alert('Passwords do not match.'); return; }
     if (farmerForm.regNumber.trim() === '') { alert('Please enter your National ID or Cooperative Registration ID.'); return; }
-    onRegisterFarmer({
+
+    const details = {
       name: farmerForm.name,
       country: farmerForm.country,
       currency: farmerForm.currency,
@@ -152,7 +204,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       approved: false,
       regNumber: farmerForm.regNumber.trim(),
       docName: farmerForm.docName || 'not_uploaded.pdf',
-    });
+      docUrl: farmerForm.docUrl || '',
+      preferredPaymentMethod: farmerForm.preferredPaymentMethod || undefined,
+    };
+
+    const email = farmerForm.contact.includes('@') ? farmerForm.contact : `${farmerForm.name.toLowerCase().replace(/\s+/g, '')}@agrolink-sadc.org`;
+    startVerification('farmer', details, email);
   };
 
   const handleBuyerSubmit = (e: React.FormEvent) => {
@@ -160,7 +217,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     if (buyerForm.password.length < 6) { alert('Password must be at least 6 characters.'); return; }
     if (buyerForm.password !== buyerForm.confirmPassword) { alert('Passwords do not match.'); return; }
     if (buyerForm.regNumber.trim() === '') { alert('Please enter your Business Registry ID or TIN.'); return; }
-    onRegisterBuyer({
+
+    const details = {
       company: buyerForm.company,
       category: buyerForm.category,
       country: buyerForm.country,
@@ -171,7 +229,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       approved: false,
       regNumber: buyerForm.regNumber.trim(),
       docName: buyerForm.docName || 'not_uploaded.pdf',
-    });
+      docUrl: buyerForm.docUrl || '',
+      preferredPaymentMethod: buyerForm.preferredPaymentMethod || undefined,
+    };
+
+    startVerification('buyer', details, buyerForm.contact);
   };
 
   return (
@@ -277,7 +339,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               {/* Farmer / Buyer Login */}
               {(loginRole === 'farmer' || loginRole === 'buyer') && (
-                <form onSubmit={handleLogin}>
+                <form onSubmit={handleLogin} autoComplete="off">
                   {loginError && (
                     <div style={{ backgroundColor: 'var(--color-danger-light)', color: 'var(--color-danger)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-sm)', marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.85rem', fontWeight: 600 }}>
                       <AlertTriangle size={15} /> {loginError}
@@ -290,10 +352,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <input
                       type="text"
                       className="form-control"
-                      placeholder={loginRole === 'farmer' ? 'e.g. Sibusiso Dlamini' : 'e.g. Eswatini Sugar Association'}
+                      placeholder={loginRole === 'farmer' ? 'e.g. Muzi Shongwe' : 'e.g. Eswatini Sugar Association'}
                       value={loginIdentifier}
                       onChange={e => { setLoginIdentifier(e.target.value); setLoginError(''); }}
-                      required autoFocus autoComplete="username"
+                      required autoFocus autoComplete="off"
                     />
                   </div>
                   <div className="form-group" style={{ position: 'relative' }}>
@@ -304,7 +366,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       placeholder="Enter your password"
                       value={loginPassword}
                       onChange={e => { setLoginPassword(e.target.value); setLoginError(''); }}
-                      required autoComplete="current-password"
+                      required autoComplete="off"
                       style={{ paddingRight: '3.5rem' }}
                     />
                     <button type="button" onClick={() => setShowLoginPassword(v => !v)}
@@ -380,11 +442,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               {/* ── Farmer Form ── */}
               {registerRole === 'farmer' ? (
-                <form onSubmit={handleFarmerSubmit}>
+                <form onSubmit={handleFarmerSubmit} autoComplete="off">
                   <div className="form-group">
                     <label className="form-label">Full Name / Cooperative Name</label>
-                    <input type="text" className="form-control" placeholder="e.g. Sibusiso Dlamini"
-                      value={farmerForm.name} onChange={e => setFarmerForm(p => ({ ...p, name: e.target.value }))} required />
+                    <input type="text" className="form-control" placeholder="e.g. Muzi Shongwe"
+                      value={farmerForm.name} onChange={e => setFarmerForm(p => ({ ...p, name: e.target.value }))} required autoComplete="off" />
                   </div>
 
                   {/* Country Selector */}
@@ -404,39 +466,53 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="form-group">
                     <label className="form-label">Town / Region</label>
                     <input type="text" className="form-control" placeholder="e.g. Manzini, Lubombo Region"
-                      value={farmerForm.location} onChange={e => setFarmerForm(p => ({ ...p, location: e.target.value }))} required />
+                      value={farmerForm.location} onChange={e => setFarmerForm(p => ({ ...p, location: e.target.value }))} required autoComplete="off" />
                   </div>
 
                   <div className="grid-cols-2">
                     <div className="form-group">
                       <label className="form-label">Farm Size (Acres)</label>
                       <input type="number" className="form-control"
-                        value={farmerForm.farmSize} onChange={e => setFarmerForm(p => ({ ...p, farmSize: parseFloat(e.target.value) || 0 }))} min="1" required />
+                        value={farmerForm.farmSize} onChange={e => setFarmerForm(p => ({ ...p, farmSize: parseFloat(e.target.value) || 0 }))} min="1" required autoComplete="off" />
                     </div>
                     <div className="form-group">
                       <label className="form-label">Primary Crops (comma sep.)</label>
                       <input type="text" className="form-control" placeholder="e.g. Sugarcane, Maize"
-                        value={farmerForm.cropTypes} onChange={e => setFarmerForm(p => ({ ...p, cropTypes: e.target.value }))} required />
+                        value={farmerForm.cropTypes} onChange={e => setFarmerForm(p => ({ ...p, cropTypes: e.target.value }))} required autoComplete="off" />
                     </div>
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Contact Mobile</label>
-                    <input type="text" className="form-control" placeholder="e.g. +268 7602-1234"
-                      value={farmerForm.contact} onChange={e => setFarmerForm(p => ({ ...p, contact: e.target.value }))} required />
+                    <label className="form-label">Contact Mobile / Email</label>
+                    <input type="text" className="form-control" placeholder="e.g. +268 7602-1234 or email@domain.com"
+                      value={farmerForm.contact} onChange={e => setFarmerForm(p => ({ ...p, contact: e.target.value }))} required autoComplete="off" />
                   </div>
 
                   <div className="grid-cols-2">
                     <div className="form-group">
                       <label className="form-label">Password (min 6 chars)</label>
                       <input type="password" className="form-control" placeholder="Create password"
-                        value={farmerForm.password} onChange={e => setFarmerForm(p => ({ ...p, password: e.target.value }))} minLength={6} required autoComplete="new-password" />
+                        value={farmerForm.password} onChange={e => setFarmerForm(p => ({ ...p, password: e.target.value }))} minLength={6} required autoComplete="off" />
                     </div>
                     <div className="form-group">
                       <label className="form-label">Confirm Password</label>
                       <input type="password" className="form-control" placeholder="Repeat password"
-                        value={farmerForm.confirmPassword} onChange={e => setFarmerForm(p => ({ ...p, confirmPassword: e.target.value }))} minLength={6} required autoComplete="new-password" />
+                        value={farmerForm.confirmPassword} onChange={e => setFarmerForm(p => ({ ...p, confirmPassword: e.target.value }))} minLength={6} required autoComplete="off" />
                     </div>
+                  </div>
+
+                  {/* Preferred Settle Method (Optional) */}
+                  <div className="form-group">
+                    <label className="form-label">Preferred Settle Method (Optional)</label>
+                    <select className="form-control" value={farmerForm.preferredPaymentMethod}
+                      onChange={e => setFarmerForm(p => ({ ...p, preferredPaymentMethod: e.target.value }))}>
+                      <option value="">-- Select Option --</option>
+                      <option value="card">Debit / Credit Card</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                      {farmerForm.country === 'Eswatini' && (
+                        <option value="mobile_money">Mobile Money (MTN MoMo / Eswatini Mobile)</option>
+                      )}
+                    </select>
                   </div>
 
                   {/* Verification measures for Farmers */}
@@ -447,7 +523,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <div className="form-group">
                       <label className="form-label">National ID / Cooperative Registration ID</label>
                       <input type="text" className="form-control" placeholder="e.g. SZ-COOP-5523"
-                        value={farmerForm.regNumber} onChange={e => setFarmerForm(p => ({ ...p, regNumber: e.target.value }))} required />
+                        value={farmerForm.regNumber} onChange={e => setFarmerForm(p => ({ ...p, regNumber: e.target.value }))} required autoComplete="off" />
                     </div>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Upload Verification Certificate (National ID / Land Permit)</label>
@@ -478,7 +554,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
                     <div className="avatar-selector-grid">
                       {AVATAR_OPTIONS.map((url, idx) => (
-                        <button key={idx} type="button" onClick={() => setFarmerForm(p => ({ ...p, avatar: url }))}
+                        <button key={url} type="button" onClick={() => setFarmerForm(p => ({ ...p, avatar: url }))}
                           className={`avatar-option-btn ${farmerForm.avatar === url ? 'selected' : ''}`}>
                           <img src={url} alt={`Preset ${idx + 1}`} className="avatar-option-img" />
                         </button>
@@ -499,11 +575,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </form>
               ) : (
                 /* ── Buyer Form ── */
-                <form onSubmit={handleBuyerSubmit}>
+                <form onSubmit={handleBuyerSubmit} autoComplete="off">
                   <div className="form-group">
                     <label className="form-label">Company / Entity Name</label>
                     <input type="text" className="form-control" placeholder="e.g. Eswatini Sugar Association"
-                      value={buyerForm.company} onChange={e => setBuyerForm(p => ({ ...p, company: e.target.value }))} required />
+                      value={buyerForm.company} onChange={e => setBuyerForm(p => ({ ...p, company: e.target.value }))} required autoComplete="off" />
                   </div>
 
                   <div className="form-group">
@@ -534,26 +610,40 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="form-group">
                     <label className="form-label">City / Region</label>
                     <input type="text" className="form-control" placeholder="e.g. Johannesburg, Gauteng"
-                      value={buyerForm.location} onChange={e => setBuyerForm(p => ({ ...p, location: e.target.value }))} required />
+                      value={buyerForm.location} onChange={e => setBuyerForm(p => ({ ...p, location: e.target.value }))} required autoComplete="off" />
                   </div>
 
                   <div className="form-group">
                     <label className="form-label">Sourcing Contact Email</label>
                     <input type="email" className="form-control" placeholder="e.g. purchasing@company.co.sz"
-                      value={buyerForm.contact} onChange={e => setBuyerForm(p => ({ ...p, contact: e.target.value }))} required />
+                      value={buyerForm.contact} onChange={e => setBuyerForm(p => ({ ...p, contact: e.target.value }))} required autoComplete="off" />
                   </div>
 
                   <div className="grid-cols-2">
                     <div className="form-group">
                       <label className="form-label">Password (min 6 chars)</label>
                       <input type="password" className="form-control" placeholder="Create password"
-                        value={buyerForm.password} onChange={e => setBuyerForm(p => ({ ...p, password: e.target.value }))} minLength={6} required autoComplete="new-password" />
+                        value={buyerForm.password} onChange={e => setBuyerForm(p => ({ ...p, password: e.target.value }))} minLength={6} required autoComplete="off" />
                     </div>
                     <div className="form-group">
                       <label className="form-label">Confirm Password</label>
                       <input type="password" className="form-control" placeholder="Repeat password"
-                        value={buyerForm.confirmPassword} onChange={e => setBuyerForm(p => ({ ...p, confirmPassword: e.target.value }))} minLength={6} required autoComplete="new-password" />
+                        value={buyerForm.confirmPassword} onChange={e => setBuyerForm(p => ({ ...p, confirmPassword: e.target.value }))} minLength={6} required autoComplete="off" />
                     </div>
+                  </div>
+
+                  {/* Preferred Settle Method (Optional) */}
+                  <div className="form-group">
+                    <label className="form-label">Preferred Settle Method (Optional)</label>
+                    <select className="form-control" value={buyerForm.preferredPaymentMethod}
+                      onChange={e => setBuyerForm(p => ({ ...p, preferredPaymentMethod: e.target.value }))}>
+                      <option value="">-- Select Option --</option>
+                      <option value="card">Debit / Credit Card</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                      {buyerForm.country === 'Eswatini' && (
+                        <option value="mobile_money">Mobile Money (MTN MoMo / Eswatini Mobile)</option>
+                      )}
+                    </select>
                   </div>
 
                   {/* Verification measures for Buyers */}
@@ -564,7 +654,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <div className="form-group">
                       <label className="form-label">Business Registration Number / TIN</label>
                       <input type="text" className="form-control" placeholder="e.g. SZ-TIN-88231"
-                        value={buyerForm.regNumber} onChange={e => setBuyerForm(p => ({ ...p, regNumber: e.target.value }))} required />
+                        value={buyerForm.regNumber} onChange={e => setBuyerForm(p => ({ ...p, regNumber: e.target.value }))} required autoComplete="off" />
                     </div>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Upload SADC Business Certificate / License</label>
@@ -596,6 +686,78 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           )}
         </div>
       </section>
+
+      {/* ── EMAIL VERIFICATION MODAL OVERLAY ── */}
+      {verifyingReg && (
+        <div style={{
+          position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 10000, padding: '1rem', backdropFilter: 'blur(5px)'
+        }}>
+          <div style={{
+            backgroundColor: '#fff', borderRadius: '16px', padding: '2rem',
+            width: '100%', maxWidth: '420px', boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              width: '60px', height: '60px', borderRadius: '50%', backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              color: 'var(--color-info)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              marginBottom: '1.25rem'
+            }}>
+              <Mail size={30} />
+            </div>
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '0.5rem' }}>Email Verification</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '1.5rem', lineHeight: '1.4' }}>
+              We have simulated sending a 6-digit confirmation code to your email contact:<br />
+              <strong style={{ color: 'var(--color-text)' }}>{verifyingReg.details.contact}</strong>
+            </p>
+
+            {verError && (
+              <div style={{
+                backgroundColor: 'var(--color-danger-light)', color: 'var(--color-danger)',
+                padding: '0.6rem 0.8rem', borderRadius: 'var(--radius-sm)', marginBottom: '1rem',
+                fontSize: '0.8rem', fontWeight: 600
+              }}>
+                {verError}
+              </div>
+            )}
+
+            <form onSubmit={handleConfirmVerification}>
+              <div className="form-group">
+                <input
+                  type="text"
+                  maxLength={6}
+                  className="form-control"
+                  placeholder="Enter 6-Digit Code"
+                  value={enteredCode}
+                  onChange={e => setEnteredCode(e.target.value.replace(/\D/g, ''))}
+                  required
+                  style={{
+                    textAlign: 'center', fontSize: '1.6rem', fontWeight: 800,
+                    letterSpacing: '8px', padding: '0.75rem', fontFamily: 'monospace'
+                  }}
+                />
+              </div>
+
+              <div style={{
+                fontSize: '0.78rem', color: 'var(--color-primary-light)', backgroundColor: 'rgba(82, 183, 136, 0.08)',
+                padding: '0.5rem 0.75rem', borderRadius: '8px', marginBottom: '1.5rem', fontWeight: 600
+              }}>
+                💡 Testing code generated: <strong style={{ textDecoration: 'underline' }}>{verifyingReg.code}</strong>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button type="button" onClick={() => setVerifyingReg(null)} className="btn btn-secondary" style={{ flex: 1 }}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                  Verify & Continue
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

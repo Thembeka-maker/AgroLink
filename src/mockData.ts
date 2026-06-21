@@ -5,7 +5,7 @@ export const MOCK_CROPS = ['Sugarcane', 'White Maize', 'Avocados', 'Citrus Orang
 export const INITIAL_FARMERS: FarmerProfile[] = [
   {
     id: 'f1',
-    name: 'Sibusiso Dlamini',
+    name: 'Muzi Shongwe',
     country: 'Eswatini',
     currency: 'SZL',
     location: 'Manzini, Eswatini',
@@ -13,13 +13,20 @@ export const INITIAL_FARMERS: FarmerProfile[] = [
     cropTypes: ['Sugarcane', 'White Maize'],
     contact: '+268 7602-1234',
     rating: 4.8,
-    ratingCount: 34,
+    ratingCount: 3,
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
     password: 'password123',
     registeredDate: '2025-01-10',
     approved: true,
     regNumber: 'SZ-FARM-1002',
     docName: 'certified_grower_license.pdf',
+    emailVerified: true,
+    preferredPaymentMethod: 'mobile_money',
+    reviews: [
+      { id: 'rev1', buyerName: 'Eswatini Sugar Association', rating: 5, comment: 'Excellent sugarcane quality, very professional cooperative partner.', date: '2026-05-15' },
+      { id: 'rev2', buyerName: 'SADC Food Processors', rating: 4, comment: 'Good quality white maize. Delivery was on time.', date: '2026-06-01' },
+      { id: 'rev3', buyerName: 'Maputo Fresh Distributors', rating: 5.4, comment: 'Great service and reliable communication.', date: '2026-06-10' }
+    ]
   },
   {
     id: 'f2',
@@ -31,13 +38,19 @@ export const INITIAL_FARMERS: FarmerProfile[] = [
     cropTypes: ['Avocados', 'Citrus Oranges'],
     contact: '+268 7811-5678',
     rating: 4.9,
-    ratingCount: 52,
+    ratingCount: 2,
     avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
     password: 'password123',
     registeredDate: '2024-11-05',
     approved: true,
     regNumber: 'SZ-FARM-2005',
     docName: 'eswatini_organic_cert.pdf',
+    emailVerified: true,
+    preferredPaymentMethod: 'mobile_money',
+    reviews: [
+      { id: 'rev4', buyerName: 'Maputo Fresh Distributors', rating: 5, comment: 'Organic avocados are premium quality. Highly recommended!', date: '2026-05-20' },
+      { id: 'rev5', buyerName: 'SADC Food Processors', rating: 4.8, comment: 'Juicy citrus oranges, will buy again next season.', date: '2026-06-12' }
+    ]
   },
   {
     id: 'f3',
@@ -49,13 +62,18 @@ export const INITIAL_FARMERS: FarmerProfile[] = [
     cropTypes: ['White Maize', 'Sorghum', 'Cassava'],
     contact: '+268 7933-9012',
     rating: 4.5,
-    ratingCount: 18,
+    ratingCount: 1,
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
     password: 'password123',
     registeredDate: '2025-03-22',
     approved: true,
     regNumber: 'SZ-FARM-3008',
     docName: 'shiselweni_cooperative_permit.pdf',
+    emailVerified: true,
+    preferredPaymentMethod: 'bank_transfer',
+    reviews: [
+      { id: 'rev6', buyerName: 'Eswatini Sugar Association', rating: 4.5, comment: 'Very large quantity capacity. Sorghum standard quality was good.', date: '2026-06-05' }
+    ]
   },
 ];
 
@@ -73,6 +91,8 @@ export const INITIAL_BUYERS: BuyerProfile[] = [
     approved: true,
     regNumber: 'SZ-TIN-88901',
     docName: 'sugar_assoc_charter.pdf',
+    emailVerified: true,
+    preferredPaymentMethod: 'bank_transfer',
   },
   {
     id: 'b2',
@@ -87,6 +107,8 @@ export const INITIAL_BUYERS: BuyerProfile[] = [
     approved: true,
     regNumber: 'ZA-REG-55201',
     docName: 'sadc_import_clearance.pdf',
+    emailVerified: true,
+    preferredPaymentMethod: 'card',
   },
   {
     id: 'b3',
@@ -101,6 +123,7 @@ export const INITIAL_BUYERS: BuyerProfile[] = [
     approved: true,
     regNumber: 'MZ-TIN-44019',
     docName: 'maputo_retail_license.pdf',
+    emailVerified: true,
   },
   {
     id: 'b4',
@@ -115,6 +138,7 @@ export const INITIAL_BUYERS: BuyerProfile[] = [
     approved: true,
     regNumber: 'SZ-TIN-77302',
     docName: 'ezulwini_export_charter.pdf',
+    emailVerified: true,
   },
 ];
 
@@ -122,7 +146,7 @@ export const INITIAL_LISTINGS: ProduceListing[] = [
   {
     id: 'l1',
     farmerId: 'f1',
-    farmerName: 'Sibusiso Dlamini',
+    farmerName: 'Muzi Shongwe',
     farmerRating: 4.8,
     crop: 'Sugarcane',
     quantity: 25000,
@@ -134,7 +158,7 @@ export const INITIAL_LISTINGS: ProduceListing[] = [
   {
     id: 'l2',
     farmerId: 'f1',
-    farmerName: 'Sibusiso Dlamini',
+    farmerName: 'Muzi Shongwe',
     farmerRating: 4.8,
     crop: 'White Maize',
     quantity: 8000,
@@ -223,7 +247,7 @@ export const INITIAL_DEALS: DealOffer[] = [
     buyerId: 'b1',
     buyerName: 'Eswatini Sugar Association',
     farmerId: 'f1',
-    farmerName: 'Sibusiso Dlamini',
+    farmerName: 'Muzi Shongwe',
     listingId: 'l1',
     crop: 'Sugarcane',
     quantity: 10000,
@@ -237,6 +261,7 @@ export const INITIAL_DEALS: DealOffer[] = [
     paymentStatus: 'unpaid',
   },
 ];
+
 
 export const CROP_PRICE_INTELLIGENCE: Record<string, CropPriceIntelligence> = {
   Sugarcane: {

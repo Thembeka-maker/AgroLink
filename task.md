@@ -1,7 +1,7 @@
-- `[ ]` Localize Mock Data
-    - `[ ]` Update src/mockData.ts with Eswatini/SADC agricultural crops, locations, and names
-- `[ ]` Add Landing Page Styles
-    - `[ ]` Add new classes to src/index.css for split layout, hero cards, and auth forms
+- `[x]` 1. Core Schema and Mock Data Setup
+    - `[x]` Add `emailVerified`, `preferredPaymentMethod` to `types.ts`
+    - `[x]` Create `Review` interface and add `reviews` to `FarmerProfile` in `types.ts`
+    - `[x]` Rename "Sibusiso Dlamini" to "Muzi Shongwe" in `mockData.ts` and add initial review comments, and auth forms
 - `[ ]` Build Landing Page Component
     - `[ ]` Create src/components/LandingPage.tsx with login switch and farmer/buyer registration forms
 - `[ ]` Integrate Session Control in Header

@@ -7,43 +7,59 @@ export const aiEngine = {
    * Run Demand Forecast & Price Intelligence
    * Fetches historical and market data, generates forecast demand indexes and recommended price ranges.
    */
-  getDemandForecast(crop: string): CropPriceIntelligence {
+  getDemandForecast(crop: string, grade: 'A' | 'B' | 'C' = 'B'): CropPriceIntelligence {
     const existingIntel = CROP_PRICE_INTELLIGENCE[crop];
+    const scale = grade === 'A' ? 1.2 : grade === 'C' ? 0.8 : 1.0;
+    
+    let baseIntel: CropPriceIntelligence;
     if (existingIntel) {
-      return existingIntel;
+      baseIntel = JSON.parse(JSON.stringify(existingIntel));
+    } else {
+      // Dynamic generation if a new crop is added
+      const hash = crop.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      const avg = 1.0 + (hash % 100) / 20; // Simulated average price
+      const min = parseFloat((avg * 0.75).toFixed(2));
+      const max = parseFloat((avg * 1.25).toFixed(2));
+      const currentDemand = (hash % 6) + 4; // 4 to 9
+      const forecastDemand = Math.min(10, Math.max(1, currentDemand + (hash % 3) - 1)); // -1, 0, +1
+      const trend = forecastDemand > currentDemand ? 'up' : forecastDemand < currentDemand ? 'down' : 'stable';
+      const recommended = parseFloat((trend === 'up' ? avg * 1.05 : trend === 'down' ? avg * 0.95 : avg).toFixed(2));
+
+      const history = Array.from({ length: 6 }, (_, i) => {
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+        const factor = 1 + ((hash + i) % 15 - 7.5) / 100;
+        return {
+          month: months[i],
+          price: parseFloat((avg * factor).toFixed(2)),
+          demandIndex: Math.min(10, Math.max(1, currentDemand + (i % 3) - 1))
+        };
+      });
+
+      baseIntel = {
+        crop,
+        minPrice: min,
+        maxPrice: max,
+        avgPrice: parseFloat(avg.toFixed(2)),
+        currentDemandIndex: currentDemand,
+        forecastDemandIndex: forecastDemand,
+        forecastPriceTrend: trend,
+        recommendedPrice: recommended,
+        marketInsights: `AI Analysis: Market activities for ${crop} demonstrate ${trend === 'up' ? 'surging interest and tight supply' : trend === 'down' ? 'temporary oversaturation' : 'balanced equilibrium'}. Recommended listing price of $${recommended}/kg is optimized for rapid matching.`,
+        history
+      };
     }
 
-    // Dynamic generation if a new crop is added
-    const hash = crop.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const avg = 1.0 + (hash % 100) / 20; // Simulated average price
-    const min = parseFloat((avg * 0.75).toFixed(2));
-    const max = parseFloat((avg * 1.25).toFixed(2));
-    const currentDemand = (hash % 6) + 4; // 4 to 9
-    const forecastDemand = Math.min(10, Math.max(1, currentDemand + (hash % 3) - 1)); // -1, 0, +1
-    const trend = forecastDemand > currentDemand ? 'up' : forecastDemand < currentDemand ? 'down' : 'stable';
-    const recommended = parseFloat((trend === 'up' ? avg * 1.05 : trend === 'down' ? avg * 0.95 : avg).toFixed(2));
-
-    const history = Array.from({ length: 6 }, (_, i) => {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-      const factor = 1 + ((hash + i) % 15 - 7.5) / 100;
-      return {
-        month: months[i],
-        price: parseFloat((avg * factor).toFixed(2)),
-        demandIndex: Math.min(10, Math.max(1, currentDemand + (i % 3) - 1))
-      };
-    });
-
     return {
-      crop,
-      minPrice: min,
-      maxPrice: max,
-      avgPrice: parseFloat(avg.toFixed(2)),
-      currentDemandIndex: currentDemand,
-      forecastDemandIndex: forecastDemand,
-      forecastPriceTrend: trend,
-      recommendedPrice: recommended,
-      marketInsights: `AI Analysis: Market activities for ${crop} demonstrate ${trend === 'up' ? 'surging interest and tight supply' : trend === 'down' ? 'temporary oversaturation' : 'balanced equilibrium'}. Recommended listing price of $${recommended}/kg is optimized for rapid matching.`,
-      history
+      ...baseIntel,
+      minPrice: parseFloat((baseIntel.minPrice * scale).toFixed(2)),
+      maxPrice: parseFloat((baseIntel.maxPrice * scale).toFixed(2)),
+      avgPrice: parseFloat((baseIntel.avgPrice * scale).toFixed(2)),
+      recommendedPrice: parseFloat((baseIntel.recommendedPrice * scale).toFixed(2)),
+      marketInsights: baseIntel.marketInsights + ` (Adjusted for Quality Grade ${grade})`,
+      history: baseIntel.history.map(h => ({
+        ...h,
+        price: parseFloat((h.price * scale).toFixed(2))
+      }))
     };
   },
 
@@ -61,9 +77,10 @@ export const aiEngine = {
     matchScore: number; // 0 to 100
     reasons: string[];
   }> {
-    const activeListings = listings.filter(
-      (l) => l.crop.toLowerCase() === demand.crop.toLowerCase() && l.quantity > 0
-    );
+    const activeListings = listings.filter((l) => {
+      const farmer = farmers.find(f => f.id === l.farmerId);
+      return l.crop.toLowerCase() === demand.crop.toLowerCase() && l.quantity > 0 && (!farmer || !farmer.suspended);
+    });
 
     const matches = activeListings.map((listing) => {
       const farmer = farmers.find((f) => f.id === listing.farmerId) || {

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import {
   Users, ShoppingBag, TrendingUp, Package, Shield, UserX, UserCheck,
-  BarChart2, AlertTriangle, LogOut, Trash2, Eye, ChevronDown, ChevronUp,
-  DollarSign, Activity, FileText,
+  BarChart2, AlertTriangle, LogOut, Trash2, Eye,
+  DollarSign, FileText, Mail, Inbox, RefreshCw, Download,
 } from 'lucide-react';
 import { AdminProfile, FarmerProfile, BuyerProfile, DealOffer, ProduceListing } from '../types';
 import { formatCurrency } from '../services/currencyService';
+import { emailService, EmailLog } from '../services/emailService';
 
 interface AdminPortalProps {
   admin: AdminProfile;
@@ -22,7 +23,7 @@ interface AdminPortalProps {
   onLogout: () => void;
 }
 
-type AdminTab = 'overview' | 'farmers' | 'buyers' | 'deals' | 'listings';
+type AdminTab = 'overview' | 'farmers' | 'buyers' | 'deals' | 'listings' | 'emails';
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({
   admin, farmers, buyers, deals, listings,
@@ -33,6 +34,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'farmer' | 'buyer'; id: string; name: string } | null>(null);
   const [inspectDoc, setInspectDoc] = useState<{ name: string; type: 'farmer' | 'buyer'; regNumber: string; docName: string } | null>(null);
+  const [emailLogs, setEmailLogs] = useState<EmailLog[]>(() => emailService.getEmailLogs());
+
+  // Listen for new emails dispatched by the system
+  React.useEffect(() => {
+    const handler = () => setEmailLogs(emailService.getEmailLogs());
+    window.addEventListener('agrolink_email_sent', handler);
+    return () => window.removeEventListener('agrolink_email_sent', handler);
+  }, []);
 
   const totalRevenue = deals.filter(d => d.paymentStatus === 'paid').reduce((s, d) => s + d.totalAmount, 0);
   const pendingPayments = deals.filter(d => d.status === 'accepted' && d.paymentStatus === 'unpaid').length;
@@ -45,6 +54,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     { id: 'buyers', label: `Buyers (${buyers.length})`, icon: <ShoppingBag size={16} /> },
     { id: 'deals', label: `Deals (${deals.length})`, icon: <TrendingUp size={16} /> },
     { id: 'listings', label: `Listings (${listings.length})`, icon: <Package size={16} /> },
+    { id: 'emails', label: `Email Log (${emailLogs.length})`, icon: <Mail size={16} /> },
   ];
 
   const statCards = [
@@ -490,6 +500,68 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </div>
           </div>
         )}
+
+        {/* ── EMAIL LOG ── */}
+        {activeTab === 'emails' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1a3c2a' }}>Simulated Email Log</h2>
+              <div style={{ display: 'flex', gap: '0.6rem' }}>
+                <button
+                  onClick={() => setEmailLogs(emailService.getEmailLogs())}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.35rem',
+                    padding: '0.4rem 0.85rem', borderRadius: '8px', border: '1px solid var(--color-border)',
+                    background: '#fff', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)',
+                  }}
+                >
+                  <RefreshCw size={13} /> Refresh
+                </button>
+                <button
+                  onClick={() => { emailService.clearEmailLogs(); setEmailLogs([]); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.35rem',
+                    padding: '0.4rem 0.85rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.3)',
+                    background: 'rgba(239,68,68,0.07)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: '#dc2626',
+                  }}
+                >
+                  <Trash2 size={13} /> Clear Log
+                </button>
+              </div>
+            </div>
+
+            {emailLogs.length === 0 ? (
+              <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                <Inbox size={40} style={{ marginBottom: '1rem', opacity: 0.3 }} />
+                <p style={{ fontSize: '0.95rem' }}>No emails have been dispatched yet. Email notifications appear here when accounts are approved, suspended, or payments are confirmed.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {emailLogs.map((log) => (
+                  <div key={log.id} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '1.25rem 1.5rem', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: '4px solid #3b82f6' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#1a3c2a', marginBottom: '0.15rem' }}>{log.subject}</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <Mail size={12} /> To: <strong>{log.to}</strong>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', fontFamily: 'monospace', backgroundColor: 'var(--color-background)', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
+                        {new Date(log.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--color-text)', backgroundColor: 'var(--color-background)', padding: '0.65rem 0.85rem', borderRadius: '8px', lineHeight: '1.5', fontStyle: 'italic', borderLeft: '3px solid rgba(59,130,246,0.25)' }}>
+                      {log.body}
+                    </div>
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <Shield size={11} /> Simulated — AgroLink Email System &bull; ID: {log.id}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Delete Confirmation Modal */}
@@ -551,13 +623,42 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
             {/* Simulated certificate preview */}
             <div style={{
-              height: '160px', backgroundColor: '#f3f4f6', borderRadius: '12px', border: '2px dashed var(--color-border)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-              color: 'var(--color-text-muted)', marginBottom: '1.5rem', padding: '1rem', textAlign: 'center',
+              background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+              borderRadius: '12px', border: '2px solid rgba(16,185,129,0.3)',
+              padding: '1.25rem', marginBottom: '1.5rem',
             }}>
-              <FileText size={32} color="#9ca3af" />
-              <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>{inspectDoc.docName}</div>
-              <div style={{ fontSize: '0.7rem' }}>SADC Certified Verification System Signature Valid &bull; AES-256 Encrypted</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Shield size={18} color="#059669" />
+                  <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#059669' }}>SADC VERIFIED CERTIFICATE</span>
+                </div>
+                <span style={{ fontSize: '0.7rem', color: '#6b7280', fontFamily: 'monospace' }}>AES-256 Encrypted</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '0.4rem', fontSize: '0.82rem', marginBottom: '0.75rem' }}>
+                <span style={{ color: '#6b7280', fontWeight: 600 }}>Document:</span>
+                <span style={{ fontWeight: 700, color: '#1a3c2a', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <FileText size={13} />{inspectDoc.docName}
+                </span>
+                <span style={{ color: '#6b7280', fontWeight: 600 }}>Account:</span>
+                <span style={{ fontWeight: 700 }}>{inspectDoc.name}</span>
+                <span style={{ color: '#6b7280', fontWeight: 600 }}>Registry:</span>
+                <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#2563eb' }}>{inspectDoc.regNumber}</span>
+                <span style={{ color: '#6b7280', fontWeight: 600 }}>Type:</span>
+                <span style={{ fontWeight: 700, textTransform: 'capitalize' }}>{inspectDoc.type} Account</span>
+              </div>
+              <div style={{ borderTop: '1px dashed rgba(16,185,129,0.4)', paddingTop: '0.6rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 600 }}>✓ Signature Integrity: Valid</span>
+                <button
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.72rem',
+                    padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(16,185,129,0.4)',
+                    background: 'rgba(16,185,129,0.08)', color: '#059669', cursor: 'pointer', fontWeight: 700,
+                  }}
+                  onClick={() => alert(`[Simulated] Download: ${inspectDoc.docName}`)}
+                >
+                  <Download size={11} /> Download
+                </button>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem' }}>

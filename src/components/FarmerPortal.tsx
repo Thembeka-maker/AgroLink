@@ -14,8 +14,10 @@ import {
   Edit2,
   Calendar,
   AlertCircle,
-  BarChart2
+  BarChart2,
+  Star
 } from 'lucide-react';
+import { formatCurrency } from '../services/currencyService';
 
 interface FarmerPortalProps {
   activeFarmer: FarmerProfile;
@@ -28,7 +30,7 @@ interface FarmerPortalProps {
   addNotification: (userId: string, title: string, message: string, type: 'deal_offer' | 'deal_status' | 'matching_alert') => void;
 }
 
-type TabType = 'dashboard' | 'list-produce' | 'intelligence' | 'deals';
+type TabType = 'dashboard' | 'list-produce' | 'intelligence' | 'deals' | 'reviews';
 
 export const FarmerPortal: React.FC<FarmerPortalProps> = ({
   activeFarmer,
@@ -60,15 +62,15 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
   const [listingSuccess, setListingSuccess] = useState(false);
 
   // AI Price Advice State
-  const [aiAdvice, setAiAdvice] = useState(() => aiEngine.getDemandForecast(MOCK_CROPS[0]));
+  const [aiAdvice, setAiAdvice] = useState(() => aiEngine.getDemandForecast(MOCK_CROPS[0], 'A'));
 
   useEffect(() => {
-    setAiAdvice(aiEngine.getDemandForecast(selectedCrop));
-  }, [selectedCrop]);
+    setAiAdvice(aiEngine.getDemandForecast(selectedCrop, grade));
+  }, [selectedCrop, grade]);
 
   // Price intelligence page crop select
   const [intelCrop, setIntelCrop] = useState(MOCK_CROPS[0]);
-  const intelData = aiEngine.getDemandForecast(intelCrop);
+  const intelData = aiEngine.getDemandForecast(intelCrop, 'B');
 
   // Filter listings and deals for this farmer
   const farmerListings = listings.filter((l) => l.farmerId === activeFarmer.id);
@@ -211,7 +213,7 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
             <g key={ratio}>
               <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y} className="chart-gridline" />
               <text x={paddingLeft - 8} y={y + 4} textAnchor="end" fontSize="10" fill="var(--color-text-muted)">
-                ${val.toFixed(2)}
+                {formatCurrency(val, activeFarmer.currency)}
               </text>
             </g>
           );
@@ -235,7 +237,7 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
               </text>
               {/* Tooltip on top of dots */}
               <text x={cx} y={cy - 10} textAnchor="middle" fontSize="9" fontWeight="700" fill="var(--color-primary-dark)">
-                ${p.price.toFixed(2)}
+                {formatCurrency(p.price, activeFarmer.currency)}
               </text>
             </g>
           );
@@ -280,6 +282,18 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
             {activeDealsCount > 0 && (
               <span className="badge-pill badge-pending" style={{ marginLeft: 'auto' }}>
                 {activeDealsCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('reviews')}
+            className={`tab-btn ${activeTab === 'reviews' ? 'active' : ''}`}
+          >
+            <Star size={18} />
+            Customer Reviews
+            {activeFarmer.reviews && activeFarmer.reviews.length > 0 && (
+              <span className="badge-pill" style={{ marginLeft: 'auto', backgroundColor: 'rgba(245, 158, 11, 0.15)', color: 'var(--color-accent-gold)' }}>
+                {activeFarmer.reviews.length}
               </span>
             )}
           </button>
@@ -329,7 +343,7 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
                   <DollarSign size={22} />
                 </div>
                 <div className="stat-details">
-                  <span className="stat-val">${totalRevenue.toLocaleString()}</span>
+                  <span className="stat-val">{formatCurrency(totalRevenue, activeFarmer.currency)}</span>
                   <span className="stat-lbl">Revenue Generated</span>
                 </div>
               </div>
@@ -463,7 +477,7 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
                             <span className="badge-pill" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: 'var(--color-info)' }}>Grade {l.grade}</span>
                           </td>
                           <td style={{ padding: '0.75rem 0.5rem', fontWeight: 600 }}>{l.quantity.toLocaleString()} kg</td>
-                          <td style={{ padding: '0.75rem 0.5rem', color: 'var(--color-primary-light)', fontWeight: 700 }}>${l.price.toFixed(2)} /kg</td>
+                          <td style={{ padding: '0.75rem 0.5rem', color: 'var(--color-primary-light)', fontWeight: 700 }}>{formatCurrency(l.price, activeFarmer.currency)} /kg</td>
                           <td style={{ padding: '0.75rem 0.5rem', color: 'var(--color-text-muted)' }}>{l.dateListed}</td>
                         </tr>
                       ))}
@@ -531,7 +545,7 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Asking Price per kg ($ USD)</label>
+                    <label className="form-label">Asking Price per kg ($ USD) {price && `(≈ ${formatCurrency(price, activeFarmer.currency)})`}</label>
                     <input
                       type="number"
                       step="0.01"
@@ -540,6 +554,7 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
                       onChange={(e) => setPrice(Math.max(0.01, parseFloat(e.target.value) || 0))}
                       min="0.01"
                       required
+                      autoComplete="off"
                     />
                   </div>
 
@@ -559,13 +574,13 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
                 </div>
                 <div style={{ marginBottom: '1.25rem' }}>
                   <p style={{ fontSize: '0.75rem', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Selected Crop</p>
-                  <h2 style={{ color: 'white', marginTop: '0.15rem' }}>{selectedCrop}</h2>
+                  <h2 style={{ color: 'white', marginTop: '0.15rem' }}>{selectedCrop} (Grade {grade})</h2>
                 </div>
 
                 <div className="grid-cols-2" style={{ gap: '1rem', marginBottom: '1.5rem' }}>
                   <div style={{ background: 'rgba(255,255,255,0.06)', padding: '0.75rem', borderRadius: 'var(--radius-sm)' }}>
                     <span style={{ fontSize: '0.75rem', color: 'var(--color-secondary)', display: 'block' }}>Recommended Price</span>
-                    <strong style={{ fontSize: '1.4rem' }}>${aiAdvice.recommendedPrice.toFixed(2)}/kg</strong>
+                    <strong style={{ fontSize: '1.4rem' }}>{formatCurrency(aiAdvice.recommendedPrice, activeFarmer.currency)}/kg</strong>
                   </div>
                   <div style={{ background: 'rgba(255,255,255,0.06)', padding: '0.75rem', borderRadius: 'var(--radius-sm)' }}>
                     <span style={{ fontSize: '0.75rem', color: 'var(--color-secondary)', display: 'block' }}>Demand Index</span>
@@ -576,9 +591,9 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
                 <div style={{ marginBottom: '1.5rem' }}>
                   <span style={{ fontSize: '0.75rem', color: 'var(--color-secondary)', display: 'block', marginBottom: '0.25rem' }}>AI Price Range Estimate</span>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem', opacity: 0.9 }}>
-                    <span>Min: ${aiAdvice.minPrice.toFixed(2)}</span>
-                    <span style={{ fontWeight: 700 }}>Avg: ${aiAdvice.avgPrice.toFixed(2)}</span>
-                    <span>Max: ${aiAdvice.maxPrice.toFixed(2)}</span>
+                    <span>Min: {formatCurrency(aiAdvice.minPrice, activeFarmer.currency)}</span>
+                    <span style={{ fontWeight: 700 }}>Avg: {formatCurrency(aiAdvice.avgPrice, activeFarmer.currency)}</span>
+                    <span>Max: {formatCurrency(aiAdvice.maxPrice, activeFarmer.currency)}</span>
                   </div>
                   {/* Visual gauge representation */}
                   <div style={{ height: '6px', background: 'rgba(255,255,255,0.15)', borderRadius: '3px', position: 'relative' }}>
@@ -678,7 +693,7 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
                 <div className="card" style={{ flex: 1, boxShadow: 'none', border: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'block' }}>AI Target Selling Price</span>
-                    <strong style={{ fontSize: '1.8rem', color: 'var(--color-primary-dark)' }}>${intelData.recommendedPrice.toFixed(2)}/kg</strong>
+                    <strong style={{ fontSize: '1.8rem', color: 'var(--color-primary-dark)' }}>{formatCurrency(intelData.recommendedPrice, activeFarmer.currency)}/kg</strong>
                     <span style={{ fontSize: '0.75rem', display: 'block', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
                       Optimized for 96% match rating
                     </span>
@@ -739,7 +754,7 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'block' }}>Total Deal Value</span>
-                          <strong style={{ fontSize: '1.25rem', color: 'var(--color-primary-dark)' }}>${deal.totalAmount.toLocaleString()}</strong>
+                          <strong style={{ fontSize: '1.25rem', color: 'var(--color-primary-dark)' }}>{formatCurrency(deal.totalAmount, activeFarmer.currency)}</strong>
                         </div>
                       </div>
 
@@ -752,7 +767,7 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
                         </div>
                         <div>
                           <span style={{ color: 'var(--color-text-muted)' }}>Proposed Unit Price: </span>
-                          <strong style={{ color: 'var(--color-primary-light)' }}>${deal.price.toFixed(2)}/kg</strong>
+                          <strong style={{ color: 'var(--color-primary-light)' }}>{formatCurrency(deal.price, activeFarmer.currency)}/kg</strong>
                         </div>
                         {deal.status === 'accepted' && (
                           <div style={{ gridColumn: 'span 2', display: 'flex', gap: '0.5rem', alignItems: 'center', backgroundColor: 'var(--color-success-light)', color: 'var(--color-primary)', padding: '0.5rem', borderRadius: 'var(--radius-sm)', marginTop: '0.5rem' }}>
@@ -791,6 +806,72 @@ export const FarmerPortal: React.FC<FarmerPortalProps> = ({
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 5: Customer Reviews */}
+        {activeTab === 'reviews' && (
+          <div className="card">
+            <h2 style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Star fill="var(--color-accent-gold)" color="var(--color-accent-gold)" size={24} />
+              Customer Reviews & Reputation Feedback
+            </h2>
+            <div style={{
+              display: 'flex', gap: '2rem', flexWrap: 'wrap', backgroundColor: 'var(--color-background)',
+              padding: '1.5rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)',
+              marginBottom: '1.5rem', alignItems: 'center'
+            }}>
+              <div>
+                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', display: 'block' }}>REPUTATION RATING</span>
+                <strong style={{ fontSize: '2.5rem', color: 'var(--color-primary-dark)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {activeFarmer.rating} <span style={{ fontSize: '1.5rem', color: 'var(--color-accent-gold)' }}>⭐</span>
+                </strong>
+              </div>
+              <div style={{ height: '50px', width: '1px', backgroundColor: 'var(--color-border)' }}></div>
+              <div>
+                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', display: 'block' }}>TOTAL TRANSACTIONS RATED</span>
+                <strong style={{ fontSize: '2.5rem', color: 'var(--color-primary-dark)' }}>{activeFarmer.reviews ? activeFarmer.reviews.length : 0}</strong>
+              </div>
+            </div>
+
+            {(!activeFarmer.reviews || activeFarmer.reviews.length === 0) ? (
+              <div style={{ padding: '3rem 0', textDecoration: 'none', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.95rem' }}>
+                You have not received any feedback comments yet. Reviews appear here after orders are delivered and paid.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {activeFarmer.reviews.map((rev) => (
+                  <div
+                    key={rev.id}
+                    className="card"
+                    style={{ padding: '1.25rem', boxShadow: 'none', border: '1px solid var(--color-border)', background: 'white' }}
+                  >
+                    <div className="flex-between" style={{ flexWrap: 'wrap', gap: '1rem', marginBottom: '0.5rem' }}>
+                      <div>
+                        <strong style={{ color: 'var(--color-primary-dark)', fontSize: '0.95rem' }}>{rev.buyerName}</strong>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginLeft: '0.5rem' }}>{rev.date}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.1rem' }}>
+                        {Array.from({ length: 5 }, (_, idx) => (
+                          <Star
+                            key={idx}
+                            size={14}
+                            fill={Math.round(rev.rating) > idx ? 'var(--color-accent-gold)' : 'none'}
+                            color="var(--color-accent-gold)"
+                          />
+                        ))}
+                        <span style={{ fontSize: '0.8rem', fontWeight: 700, marginLeft: '0.25rem', color: 'var(--color-primary-dark)' }}>
+                          {rev.rating}
+                        </span>
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '0.9rem', color: 'var(--color-text)', margin: 0, fontStyle: 'italic', lineHeight: '1.4' }}>
+                      "{rev.comment}"
+                    </p>
+                  </div>
+                ))}
               </div>
             )}
           </div>
